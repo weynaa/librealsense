@@ -133,10 +133,12 @@ int main(int argc, char * argv[]) try
     rs2::pipeline pipe;
 
     rs2::config cfg;
+/*
     cfg.enable_stream(RS2_STREAM_DEPTH); // Enable default depth
     // For the color stream, set format to RGBA
     // To allow blending of the color frame on top of the depth frame
-    cfg.enable_stream(RS2_STREAM_COLOR, RS2_FORMAT_RGBA8);
+    cfg.enable_stream(RS2_STREAM_COLOR, RS2_FORMAT_RGBA8);*/
+		cfg.enable_device_from_file("../../artekmed_data/test_recording02/rscapture1.bag");
     auto profile = pipe.start(cfg);
 
     auto sensor = profile.get_device().first<rs2::depth_sensor>();
