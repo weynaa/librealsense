@@ -238,9 +238,10 @@ int main(int argc, char * argv[]) try
     rs2::config cfg;
 
     // Add streams of gyro and accelerometer to configuration
-    cfg.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
+    /*cfg.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
     cfg.enable_stream(RS2_STREAM_GYRO, RS2_FORMAT_MOTION_XYZ32F);
-
+		*/
+		cfg.enable_device_from_file("artekmed_data/test_recording02/rscapture1.bag")
     // Declare object for rendering camera motion
     camera_renderer camera;
     // Declare object that handles camera pose calculations
