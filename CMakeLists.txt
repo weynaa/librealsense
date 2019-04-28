@@ -72,4 +72,6 @@ if (BUILD_WITH_TM2)
     add_tm2()
 endif()
 
+add_subdirectory(michael)
+
 include(CMake/install_config.cmake)
