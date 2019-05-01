@@ -2,7 +2,35 @@
 #include <librealsense2/rsutil.h>
 #include <pcl/pclHeader.h>
 #include <pcl/io/pcd_io.h>
+#include <Eigen/Geometry>
+#include <array>
 
+constexpr float PI = 3.1415926535897f;
+
+template<typename Derived>
+Eigen::Matrix<typename Derived::Scalar, 4, 4> lookAt(Derived const& eye, Derived const& center, Derived const& up) {
+	typedef Eigen::Matrix<typename Derived::Scalar, 4, 4> Matrix4;
+	typedef Eigen::Matrix<typename Derived::Scalar, 3, 1> Vector3;
+	Vector3 f = (center - eye).normalized();
+	Vector3 u = up.normalized();
+	Vector3 s = f.cross(u).normalized();
+	u = s.cross(f);
+	Matrix4 mat = Matrix4::Zero();
+	mat(0, 0) = s.x();
+	mat(0, 1) = s.y();
+	mat(0, 2) = s.z();
+	mat(0, 3) = -s.dot(eye);
+	mat(1, 0) = u.x();
+	mat(1, 1) = u.y();
+	mat(1, 2) = u.z();
+	mat(1, 3) = -u.dot(eye);
+	mat(2, 0) = -f.x();
+	mat(2, 1) = -f.y();
+	mat(2, 2) = -f.z();
+	mat(2, 3) = f.dot(eye);
+	mat.row(3) << 0, 0, 0, 1;
+	return mat;
+}
 
 struct RSPipe {
 	rs2::pipeline pipe;
@@ -30,7 +58,17 @@ Eigen::Matrix4f intrinsicsToMatrix(const rs2_intrinsics& intrinsic) {
 
 using pcl_ptr = pcl::PointCloud<pcl::PointXYZ>::Ptr;
 
+std::vector<Eigen::Matrix4f> m_extrinsics = {};
+
 int main(int argc, char** argv) {
+	Eigen::AngleAxisf(PI, Eigen::Vector3f::UnitY()).matrix(),
+
+
+	m_extrinsics.push_back(lookAt(Eigen::Vector3f{ 0,1,1 }, { 0,0,0 }, {0,-1,0}).inverse());
+	m_extrinsics.push_back(
+		(Eigen::Translation3f(0,100,2000)*Eigen::Affine3f::Identity()).matrix()
+		* lookAt(Eigen::Vector3f{ 0,1,-1.2 }, { 0,0,0 }, { 0,-1,0 }).inverse());
+
 	std::vector<RSPipe> pipes;
 	{
 		rs2::config config;
@@ -62,7 +100,8 @@ int main(int argc, char** argv) {
 	auto points = boost::make_shared < pcl::PointCloud<pcl::PointXYZ>>();
 	points->width = 1;
 	points->height = 0;
-	for (const auto& frame : new_frames) {
+	for (int i = 0; i < new_frames.size();++i) {
+		const auto& frame = new_frames[i];
 		auto intrinsic = frame.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
 		auto t = intrinsicsToMatrix(intrinsic);
 		intrinsics.push_back(t);
@@ -79,16 +118,15 @@ int main(int argc, char** argv) {
 				vec = t * vec;
 				vec.x() *= depth;
 				vec.y() *= depth;
-				vec.z() *= depth;
+				vec.z() = depth;
+				vec = m_extrinsics[i] * vec;
 				points->points.emplace_back(vec.x(), vec.y(), vec.z());
 			}
-		}
-		if (&frame == &new_frames[0]) {
-			pcl::io::savePCDFile("rs2Data_1.pcd", *points, true);
-		}
+		}	
+		//pcl::io::savePCDFile("rs2Data_" + std::to_string(i) + ".pcd", *points, true);
 	}
 
-	//pcl::io::savePCDFile("rs2Data.pcd", *points, true);
+	pcl::io::savePCDFile("rs2Data.pcd", *points, true);
 
 	return 0;
 }

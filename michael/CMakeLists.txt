@@ -9,7 +9,6 @@ project(MichaelExamples)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 include(${CMAKE_SOURCE_DIR}/CMake/opengl_config.cmake)
-set(DEPENDENCIES realsense2)
 
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
@@ -22,6 +21,6 @@ endif()
 
 add_executable(FilterTests FilterTests.cpp)
 set_property(TARGET FilterTests PROPERTY CXX_STANDARD 11)
-target_link_libraries(FilterTests ${DEPENDENCIES})
+target_link_libraries(FilterTests realsense2)
 set_target_properties (FilterTests PROPERTIES FOLDER Michael)
 install(TARGETS FilterTests RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
