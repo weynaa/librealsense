@@ -2,6 +2,10 @@
 #include <librealsense2/rsutil.h>
 #include <pcl/pclHeader.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/bilateral.h>
+#include <pcl/features/normal_3d.h> //PCA Normal
 #include <Eigen/Geometry>
 #include <array>
 
@@ -86,11 +90,26 @@ int main(int argc, char** argv) {
 		p.pipe.start(p.config);
 	}
 
+	rs2::decimation_filter dec_filter;
+	auto options = dec_filter.get_supported_options();
+	dec_filter.set_option(RS2_OPTION_FILTER_MAGNITUDE, 4);
+	rs2::disparity_transform depth_to_disparity(true);
+	rs2::disparity_transform disparity_to_depth(false);
+	rs2::spatial_filter spat_filter;
+	auto opt = spat_filter.get_supported_options();
+	spat_filter.set_option(RS2_OPTION_FILTER_MAGNITUDE, 2);
+	spat_filter.set_option(RS2_OPTION_FILTER_SMOOTH_ALPHA, 0.4);
+	spat_filter.set_option(RS2_OPTION_FILTER_SMOOTH_DELTA, 20);
 	std::vector<rs2::frame> new_frames;
 	for (auto&& pipe : pipes)
 	{
 		rs2::frameset fs = pipe.pipe.wait_for_frames();
-		new_frames.emplace_back(fs.get_depth_frame());
+		auto depth = fs.get_depth_frame();
+		depth = dec_filter.process(depth);
+		depth = depth_to_disparity.process(depth);
+		depth = spat_filter.process(depth);
+		depth = disparity_to_depth.process(depth);
+		new_frames.emplace_back(depth);
 	}
 	//Referenzcamera für extrinsics
 	auto base_cam = pipes.front().pipe.get_active_profile().get_stream(RS2_STREAM_DEPTH);
@@ -112,9 +131,10 @@ int main(int argc, char** argv) {
 		points->height += numPoints;
 		for (int y = 0; y < intrinsic.height; ++y) {
 			for (int x = 0; x < intrinsic.width; ++x) {
-				//Kann auch einfach rs2_deproject_pixel_to_point gemacht werden
-				auto vec = Eigen::Vector4f{(float)x,(float)y,1,1};
 				auto depth = (float)((uint16_t*)frame.get_data())[y * intrinsic.width + x];
+				//Kann auch einfach in rs2_deproject_pixel_to_point gemacht werden
+
+				auto vec = Eigen::Vector4f{(float)x,(float)y,1,1};
 				vec = t * vec;
 				vec.x() *= depth;
 				vec.y() *= depth;
@@ -126,7 +146,37 @@ int main(int argc, char** argv) {
 		//pcl::io::savePCDFile("rs2Data_" + std::to_string(i) + ".pcd", *points, true);
 	}
 
-	pcl::io::savePCDFile("rs2Data.pcd", *points, true);
+
+	//Zeit zum Filtern
+	auto processed = boost::make_shared < pcl::PointCloud<pcl::PointXYZ>>();
+	{
+		auto approxVoxelGird = pcl::StatisticalOutlierRemoval<pcl::PointXYZ>();
+		approxVoxelGird.setMeanK(6);
+		approxVoxelGird.setStddevMulThresh(1);
+		approxVoxelGird.setInputCloud(points);
+		approxVoxelGird.filter(*processed);
+		*points = *processed;
+	}
+/*
+	auto normals = boost::make_shared<pcl::PointCloud<pcl::Normal>>();
+	auto kdtree = boost::make_shared< pcl::search::KdTree<pcl::PointXYZ>>();
+	{
+		auto normalEst = pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal>();
+		normalEst.setSearchMethod(kdtree);
+		normalEst.setInputCloud(points);
+		normalEst.setRadiusSearch(15); 
+		normalEst.compute(*normals);
+	}*/
+	
+		auto approxVoxelGird = pcl::VoxelGrid<pcl::PointXYZ>();
+		approxVoxelGird.setLeafSize(20,20,20);
+		approxVoxelGird.setInputCloud(points);
+		approxVoxelGird.filter(*processed);
+		*points = *processed;
+	
+
+	pcl::io::savePCDFile("rs2Data_voxel35.pcd", *points, true);
+/*	pcl::io::savePCDFile("rs2Data_normals.pcd", *normals, true);*/
 
 	return 0;
 }
